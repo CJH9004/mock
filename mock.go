@@ -2,27 +2,43 @@ package mock
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 )
 
+// MockFunc is costomized mock func
 type MockFunc func() interface{}
 
+// ValidFunc is costomized valid func
 type ValidFunc func(interface{}) bool
 
+// MockFuncs is costomized mock funcs map
 type MockFuncs map[string]MockFunc
 
+// ValidFuncs is costomized valid funcs map
 type ValidFuncs map[string]ValidFunc
 
+// Mocker mock the data
 type Mocker interface {
-	Mock(data interface{}) error
-	Valid(data interface{}) (bool, error)
-	SetMockFuncs(fns map[string]func() interface{})
-	SetValidFuncs(fns map[string]func(interface{}) bool)
+	Mock(tags string, data interface{}) error
+	Valid(tags string, data interface{}) (bool, error)
+	SetMockFuncs(fns MockFuncs)
+	SetValidFuncs(fns ValidFuncs)
+	// Errors() []error
 }
 
 type mocker struct {
 	mockFuncs  MockFuncs
 	validFuncs ValidFuncs
+	err        error
+}
+
+// New return a Mocker
+func New(mockFuncs MockFuncs, validFuncs ValidFuncs) Mocker {
+	return &mocker{
+		mockFuncs:  mockFuncs,
+		validFuncs: validFuncs,
+	}
 }
 
 func (m *mocker) SetMockFuncs(fns MockFuncs) {
@@ -33,41 +49,50 @@ func (m *mocker) SetValidFuncs(fns ValidFuncs) {
 	m.validFuncs = fns
 }
 
-func (m *mocker) Mock(data interface{}) error {
+func (m *mocker) Mock(tags string, data interface{}) error {
 	v := reflect.ValueOf(data)
 	if v.Kind() != reflect.Ptr {
 		return errors.New("not a pointer")
 	}
-	if v.Elem().Kind() != reflect.Struct {
-		return errors.New("not a pointer of a struct")
-	}
-	m.mock("", v.Elem())
-	return nil
+	m.mock(tags, v.Elem())
+	return m.err
 }
 
-func (m *mocker) Valid(data interface{}) (bool, error) {
+func (m *mocker) Valid(tags string, data interface{}) (bool, error) {
 	return true, nil
 }
 
 func (m *mocker) mock(tags string, v reflect.Value) {
-	
+	t := m.parseTag(v.Type().Name(), tags)
+	if fn, ok := m.mockFuncs[t.MockFunc]; ok {
+		v.Set(reflect.ValueOf(fn()))
+	}
 	switch v.Type().Kind() {
 	case reflect.Ptr:
-		m.mock("", v.Elem())
+		m.mock(tags, v.Elem())
 	case reflect.Struct:
-		m.mockStruct(v)
+		m.mockStruct(t, v)
 	case reflect.Slice:
-		m.mockSlice(tags, v)
+		m.mockSlice(t, v)
 	case reflect.Array:
-		m.mockArray(tags, v)
+		m.mockArray(t, v)
 	case reflect.Map:
-		m.mockMap(tags, v)
+		m.mockMap(t, v)
 	default:
-		m.mockField(tags, v)
+		m.mockField(t, v)
 	}
 }
 
-func (m *mocker) mockStruct(v reflect.Value) {
+func (m *mocker) parseTag(typ, tags string) Tag {
+	var t Tag
+	var err error
+	if t, err = parseTag(typ, tags); err != nil {
+		m.err = err
+	}
+	return t
+}
+
+func (m *mocker) mockStruct(tag Tag, v reflect.Value) {
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		vf := v.Field(i)
@@ -80,10 +105,10 @@ func (m *mocker) mockStruct(v reflect.Value) {
 	}
 }
 
-func (m *mocker) mockField(tags string, v reflect.Value) {
+func (m *mocker) mockField(t Tag, v reflect.Value) {
 	switch v.Type().Kind() {
 	case reflect.String:
-		v.SetString(m.mockString(tags))
+		m.mockString(t, v)
 	case reflect.Int:
 		fallthrough
 	case reflect.Int8:
@@ -93,7 +118,7 @@ func (m *mocker) mockField(tags string, v reflect.Value) {
 	case reflect.Int32:
 		fallthrough
 	case reflect.Int64:
-		v.SetInt(m.mockInt(tags))
+		m.mockInt(t, v)
 	case reflect.Uint:
 		fallthrough
 	case reflect.Uint8:
@@ -103,56 +128,58 @@ func (m *mocker) mockField(tags string, v reflect.Value) {
 	case reflect.Uint32:
 		fallthrough
 	case reflect.Uint64:
-		v.SetUint(m.mockUint(tags))
+		m.mockUint(t, v)
 	case reflect.Float32:
 		fallthrough
 	case reflect.Float64:
-		v.SetFloat(m.mockFloat(tags))
+		m.mockFloat(t, v)
 		// default:
 		// 	log.Println("Unsupported type:", v.Type().Kind())
 	}
 }
 
-func (m *mocker) mockString(tags string) string {
-	return "asdf"
+func (m *mocker) mockString(t Tag, v reflect.Value) {
+	v.SetString(genString(t))
 }
 
-func (m *mocker) mockInt(tags string) int64 {
-	return -10
+func (m *mocker) mockInt(t Tag, v reflect.Value) {
+	v.SetInt(genInt(t))
 }
 
-func (m *mocker) mockUint(tags string) uint64 {
-	return 10
+func (m *mocker) mockUint(t Tag, v reflect.Value) {
+	v.SetUint(genUint(t))
 }
 
-func (m *mocker) mockFloat(tags string) float64 {
-	return 10.101
+func (m *mocker) mockFloat(t Tag, v reflect.Value) {
+	v.SetFloat(genFloat(t))
 }
 
-func (m *mocker) mockSlice(tags string, v reflect.Value) {
-	v.Set(reflect.MakeSlice(v.Type(), 3, 3))
+func (m *mocker) mockSlice(t Tag, v reflect.Value) {
+	length := genInt(t)
+	v.Set(reflect.MakeSlice(v.Type(), int(length), int(length)))
 	for i := 0; i < v.Len(); i++ {
-		m.mock(tags, v.Index(i))
+		m.mock("", v.Index(i))
 	}
 }
 
-func (m *mocker) mockArray(tags string, v reflect.Value) {
+func (m *mocker) mockArray(t Tag, v reflect.Value) {
 	for i := 0; i < v.Len(); i++ {
-		m.mock(tags, v.Index(i))
+		m.mock("", v.Index(i))
 	}
 }
 
-func (m *mocker) mockMap(tags string, v reflect.Value) {
+func (m *mocker) mockMap(t Tag, v reflect.Value) {
 	if v.Type().Key().Kind() != reflect.String {
-		// log.Fatal("Unsupported map key type:", v.Type().Key().Kind())
+		m.err = fmt.Errorf("Unsupported map key type: %s", v.Type().Key().Kind())
 		return
 	}
 
-	v.Set(reflect.MakeMapWithSize(v.Type(), 3))
+	length := genInt(t)
+	v.Set(reflect.MakeMapWithSize(v.Type(), int(length)))
 	for i := 0; i < 3; i++ {
-		key := reflect.ValueOf(m.mockString(tags))
+		key := reflect.ValueOf(genString(m.parseTag("string", "type(word)")))
 		value := reflect.New(v.Type().Elem())
-		m.mock(tags, value)
+		m.mock("", value)
 		v.SetMapIndex(key, value.Elem())
 	}
 }
