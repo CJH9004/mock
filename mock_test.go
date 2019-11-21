@@ -3,6 +3,7 @@ package mock
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestMock(t *testing.T) {
@@ -29,7 +30,7 @@ func TestMock(t *testing.T) {
 		} `mock:"min(0) max(4)"`
 	}
 	sc := SC{Set: "set"}
-	mocker := New(nil, nil)
+	mocker := New(nil, nil, time.Now().UnixNano())
 	err := mocker.Mock("", &sc)
 	fmt.Println(sc)
 	fmt.Println(err)

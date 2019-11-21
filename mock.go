@@ -3,6 +3,7 @@ package mock
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
 )
 
@@ -30,14 +31,16 @@ type Mocker interface {
 type mocker struct {
 	mockFuncs  MockFuncs
 	validFuncs ValidFuncs
+	gen        generator
 	err        error
 }
 
 // New return a Mocker
-func New(mockFuncs MockFuncs, validFuncs ValidFuncs) Mocker {
+func New(mockFuncs MockFuncs, validFuncs ValidFuncs, seed int64) Mocker {
 	return &mocker{
 		mockFuncs:  mockFuncs,
 		validFuncs: validFuncs,
+		gen:        generator{rand: rand.New(rand.NewSource(seed))},
 	}
 }
 
@@ -139,23 +142,23 @@ func (m *mocker) mockField(t Tag, v reflect.Value) {
 }
 
 func (m *mocker) mockString(t Tag, v reflect.Value) {
-	v.SetString(genString(t))
+	v.SetString(m.gen.string(t))
 }
 
 func (m *mocker) mockInt(t Tag, v reflect.Value) {
-	v.SetInt(genInt(t))
+	v.SetInt(m.gen.int(t))
 }
 
 func (m *mocker) mockUint(t Tag, v reflect.Value) {
-	v.SetUint(genUint(t))
+	v.SetUint(m.gen.uint(t))
 }
 
 func (m *mocker) mockFloat(t Tag, v reflect.Value) {
-	v.SetFloat(genFloat(t))
+	v.SetFloat(m.gen.float(t))
 }
 
 func (m *mocker) mockSlice(t Tag, v reflect.Value) {
-	length := genInt(t)
+	length := m.gen.int(t)
 	v.Set(reflect.MakeSlice(v.Type(), int(length), int(length)))
 	for i := 0; i < v.Len(); i++ {
 		m.mock("", v.Index(i))
@@ -174,10 +177,10 @@ func (m *mocker) mockMap(t Tag, v reflect.Value) {
 		return
 	}
 
-	length := genInt(t)
+	length := m.gen.int(t)
 	v.Set(reflect.MakeMapWithSize(v.Type(), int(length)))
 	for i := 0; i < 3; i++ {
-		key := reflect.ValueOf(genString(m.parseTag("string", "type(word)")))
+		key := reflect.ValueOf(m.gen.string(m.parseTag("string", "type(word)")))
 		value := reflect.New(v.Type().Elem())
 		m.mock("", value)
 		v.SetMapIndex(key, value.Elem())
