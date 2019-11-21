@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// todo: add interface
+
 type generator struct {
 	rand *rand.Rand
 }

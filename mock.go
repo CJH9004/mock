@@ -7,6 +7,8 @@ import (
 	"reflect"
 )
 
+// todo: 嵌套tag，将对tag的处理转移到generator
+
 // MockFunc is costomized mock func
 type MockFunc func() interface{}
 

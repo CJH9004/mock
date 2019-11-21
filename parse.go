@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// todo: error handle
+// todo: error handle; add tag funcs: key(tag) elem(tag) range(1,2) format(Mon Jan 2 15:04:05 -0700 MST 2006) ; 
 
 // TypeList is the avalid type
-var TypeList = []string{"eamil", "date", "phone", "url", "ipv4", "domain", "word", "sentence", "a&i"}
+var TypeList = []string{"eamil", "date", "phone", "url", "ipv4", "domain", "word", "sentence"}
 
 func isInTypeList(s string) bool {
 	for _, v := range TypeList {
