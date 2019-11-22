@@ -247,3 +247,21 @@ func TestFormats(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, time.Now().Format("2006-01-02"), n)
 }
+
+func TestFormValues(t *testing.T) {
+	m := New(time.Now().UnixNano(), nil)
+	var err error
+
+	var n string
+	err = m.Mock("value(a, b, c)", &n)
+	assert.Nil(t, err)
+	in := func(s string, vals []string) bool {
+		for _, v := range vals {
+			if s == v {
+				return true
+			}
+		}
+		return false
+	}
+	assert.True(t, in(n, []string{"a", "b", "c"}))
+}
