@@ -7,16 +7,14 @@ import (
 	"reflect"
 )
 
-// todo: 嵌套tag，将对tag的处理转移到generator
-
-// MockFunc is costomized mock func
-type MockFunc func() interface{}
+// GenFunc is costomized mock func
+type GenFunc func() interface{}
 
 // ValidFunc is costomized valid func
 type ValidFunc func(interface{}) bool
 
-// MockFuncs is costomized mock funcs map
-type MockFuncs map[string]MockFunc
+// GenFuncs is costomized mock funcs map
+type GenFuncs map[string]GenFunc
 
 // ValidFuncs is costomized valid funcs map
 type ValidFuncs map[string]ValidFunc
@@ -25,33 +23,57 @@ type ValidFuncs map[string]ValidFunc
 type Mocker interface {
 	Mock(tags string, data interface{}) error
 	Valid(tags string, data interface{}) (bool, error)
-	SetMockFuncs(fns MockFuncs)
+	SetGenFuncs(fns GenFuncs)
 	SetValidFuncs(fns ValidFuncs)
-	// Errors() []error
+	SetTags(map[string]string)
+	SetFormats(map[string]string)
 }
 
 type mocker struct {
-	mockFuncs  MockFuncs
+	genFuncs   GenFuncs
 	validFuncs ValidFuncs
+	tags       map[string]string
+	formats    map[string]string
 	gen        generator
 	err        error
 }
 
+// Options store the ortions of Mocker
+type Options struct {
+	GenFuncs   GenFuncs
+	ValidFuncs ValidFuncs
+	Tags       map[string]string
+	Formats    map[string]string
+}
+
 // New return a Mocker
-func New(mockFuncs MockFuncs, validFuncs ValidFuncs, seed int64) Mocker {
+func New(seed int64, options *Options) Mocker {
+	if options == nil {
+		options = &Options{}
+	}
 	return &mocker{
-		mockFuncs:  mockFuncs,
-		validFuncs: validFuncs,
+		genFuncs:   options.GenFuncs,
+		validFuncs: options.ValidFuncs,
+		tags:       options.Tags,
+		formats:    options.Formats,
 		gen:        generator{rand: rand.New(rand.NewSource(seed))},
 	}
 }
 
-func (m *mocker) SetMockFuncs(fns MockFuncs) {
-	m.mockFuncs = fns
+func (m *mocker) SetGenFuncs(fns GenFuncs) {
+	m.genFuncs = fns
 }
 
 func (m *mocker) SetValidFuncs(fns ValidFuncs) {
 	m.validFuncs = fns
+}
+
+func (m *mocker) SetTags(tags map[string]string) {
+	m.tags = tags
+}
+
+func (m *mocker) SetFormats(formats map[string]string) {
+	m.formats = formats
 }
 
 func (m *mocker) Mock(tags string, data interface{}) error {
@@ -68,13 +90,15 @@ func (m *mocker) Valid(tags string, data interface{}) (bool, error) {
 }
 
 func (m *mocker) mock(tags string, v reflect.Value) {
+	if v.Type().Kind() == reflect.Ptr {
+		m.mock(tags, v.Elem())
+	}
 	t := m.parseTag(v.Type().Name(), tags)
-	if fn, ok := m.mockFuncs[t.MockFunc]; ok {
+	if fn, ok := m.genFuncs[t.GenFunc]; ok {
 		v.Set(reflect.ValueOf(fn()))
+		return
 	}
 	switch v.Type().Kind() {
-	case reflect.Ptr:
-		m.mock(tags, v.Elem())
 	case reflect.Struct:
 		m.mockStruct(t, v)
 	case reflect.Slice:
@@ -91,8 +115,20 @@ func (m *mocker) mock(tags string, v reflect.Value) {
 func (m *mocker) parseTag(typ, tags string) Tag {
 	var t Tag
 	var err error
-	if t, err = parseTag(typ, tags); err != nil {
+	if t, err = ParseTag(typ, tags); err != nil {
 		m.err = err
+	}
+	if tag, ok := m.tags[t.Tag]; ok {
+		t = m.parseTag(typ, tag)
+	}
+	if v, ok := m.tags[t.Key]; ok {
+		t.Key = v
+	}
+	if v, ok := m.tags[t.Elem]; ok {
+		t.Elem = v
+	}
+	if v, ok := m.formats[t.Format]; ok {
+		t.Format = v
 	}
 	return t
 }
@@ -163,13 +199,13 @@ func (m *mocker) mockSlice(t Tag, v reflect.Value) {
 	length := m.gen.int(t)
 	v.Set(reflect.MakeSlice(v.Type(), int(length), int(length)))
 	for i := 0; i < v.Len(); i++ {
-		m.mock("", v.Index(i))
+		m.mock(t.Elem, v.Index(i))
 	}
 }
 
 func (m *mocker) mockArray(t Tag, v reflect.Value) {
 	for i := 0; i < v.Len(); i++ {
-		m.mock("", v.Index(i))
+		m.mock(t.Elem, v.Index(i))
 	}
 }
 
@@ -181,10 +217,14 @@ func (m *mocker) mockMap(t Tag, v reflect.Value) {
 
 	length := m.gen.int(t)
 	v.Set(reflect.MakeMapWithSize(v.Type(), int(length)))
-	for i := 0; i < 3; i++ {
-		key := reflect.ValueOf(m.gen.string(m.parseTag("string", "type(word)")))
+	for i := 0; i < int(length); i++ {
+		keyTag := "type(word)"
+		if t.Key != "" {
+			keyTag = t.Key
+		}
+		key := reflect.ValueOf(m.gen.string(m.parseTag("string", keyTag)))
 		value := reflect.New(v.Type().Elem())
-		m.mock("", value)
+		m.mock(t.Elem, value.Elem())
 		v.SetMapIndex(key, value.Elem())
 	}
 }

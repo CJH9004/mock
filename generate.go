@@ -7,14 +7,62 @@ import (
 	"time"
 )
 
-// todo: add interface
+// Generator gen int uint float and string
+type Generator interface {
+	Int(string) (int64, error)
+	Uint(string) (uint64, error)
+	Float(string) (float64, error)
+	String(string) (string, error)
+}
 
 type generator struct {
 	rand *rand.Rand
 }
 
+// NewGen return a Generator
+func NewGen(rand *rand.Rand) Generator {
+	return generator{
+		rand: rand,
+	}
+}
+
+func (g generator) Int(ts string) (ret int64, err error) {
+	t, err := ParseTag("int", ts)
+	if err != nil {
+		return 0, err
+	}
+	return g.int(t), nil
+}
+
+func (g generator) Uint(ts string) (ret uint64, err error) {
+	t, err := ParseTag("uint", ts)
+	if err != nil {
+		return 0, err
+	}
+	return g.uint(t), nil
+}
+
+func (g generator) Float(ts string) (ret float64, err error) {
+	t, err := ParseTag("float", ts)
+	if err != nil {
+		return 0, err
+	}
+	return g.float(t), nil
+}
+
+func (g generator) String(ts string) (ret string, err error) {
+	t, err := ParseTag("string", ts)
+	if err != nil {
+		return "", err
+	}
+	return g.string(t), nil
+}
+
 // Chars contains gen default string avaliable chars
 const Chars = `0123456789abcdefghijklmnopqrstuvwxyz!@#$%^&*(){}[]<>?,./\|:";'~`
+
+// TimeFormat is default time format
+const TimeFormat = "Mon Jan 2 15:04:05 -0700 MST 2006"
 
 func (g generator) fromValues(vals []interface{}) interface{} {
 	return vals[g.int63n(int64(len(vals)))]
@@ -28,6 +76,9 @@ func (g generator) int63n(n int64) int64 {
 }
 
 func (g generator) int(tag Tag) int64 {
+	if tag.Type == "date" {
+		return g.dateUnix(tag)
+	}
 	return g.int63n(tag.Max-tag.Min) + tag.Min
 }
 
@@ -47,7 +98,7 @@ func (g generator) string(tag Tag) string {
 	if isInTypeList(tag.Type) {
 		switch tag.Type {
 		case "date":
-			return g.dateString()
+			return g.dateString(tag)
 		case "email":
 			return g.eamil()
 		case "phone":
@@ -76,8 +127,23 @@ func (g generator) eamil() string {
 	return g.word(0, 10) + "@" + g.word(0, 10) + "." + g.word(0, 10)
 }
 
-func (g generator) dateString() string {
-	return time.Now().Format("Mon Jan 2 15:04:05 -0700 MST 2006")
+func (g generator) dateString(tag Tag) string {
+	format := TimeFormat
+	if tag.Format != "" {
+		format = tag.Format
+	}
+	return time.Now().Format(format)
+}
+
+func (g generator) dateUnix(tag Tag) int64 {
+	switch tag.Format {
+	case "ns":
+		return time.Now().UnixNano()
+	case "ms":
+		return time.Now().UnixNano() / 1000000
+	default:
+		return time.Now().Unix()
+	}
 }
 
 func (g generator) phone() string {
