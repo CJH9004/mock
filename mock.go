@@ -8,7 +8,7 @@ import (
 )
 
 // GenFunc is costomized mock func
-type GenFunc func() interface{}
+type GenFunc func(interface{}) interface{}
 
 // ValidFunc is costomized valid func
 type ValidFunc func(interface{}) bool
@@ -27,11 +27,16 @@ type Mocker interface {
 	SetValidFuncs(fns ValidFuncs)
 	SetTags(map[string]string)
 	SetFormats(map[string]string)
+	SetBefore(func(interface{}))
+	SetAfter(func(interface{}))
 }
 
 type mocker struct {
+	current    interface{}
 	genFuncs   GenFuncs
 	validFuncs ValidFuncs
+	after      func(interface{})
+	before     func(interface{})
 	tags       map[string]string
 	formats    map[string]string
 	gen        generator
@@ -44,6 +49,8 @@ type Options struct {
 	ValidFuncs ValidFuncs
 	Tags       map[string]string
 	Formats    map[string]string
+	After      func(interface{})
+	Before     func(interface{})
 }
 
 // New return a Mocker
@@ -54,6 +61,8 @@ func New(seed int64, options *Options) Mocker {
 	return &mocker{
 		genFuncs:   options.GenFuncs,
 		validFuncs: options.ValidFuncs,
+		after:      options.After,
+		before:     options.Before,
 		tags:       options.Tags,
 		formats:    options.Formats,
 		gen:        generator{rand: rand.New(rand.NewSource(seed))},
@@ -76,12 +85,29 @@ func (m *mocker) SetFormats(formats map[string]string) {
 	m.formats = formats
 }
 
+func (m *mocker) SetAfter(fn func(interface{})) {
+	m.after = fn
+}
+
+func (m *mocker) SetBefore(fn func(interface{})) {
+	m.before = fn
+}
+
 func (m *mocker) Mock(tags string, data interface{}) error {
+	if m.before != nil {
+		m.before(data)
+	}
+
+	m.current = data
 	v := reflect.ValueOf(data)
 	if v.Kind() != reflect.Ptr {
 		return errors.New("not a pointer")
 	}
 	m.mock(tags, v.Elem())
+
+	if m.after != nil {
+		m.after(m.current)
+	}
 	return m.err
 }
 
@@ -95,7 +121,7 @@ func (m *mocker) mock(tags string, v reflect.Value) {
 	}
 	t := m.parseTag(v.Type().Name(), tags)
 	if fn, ok := m.genFuncs[t.GenFunc]; ok {
-		v.Set(reflect.ValueOf(fn()))
+		v.Set(reflect.ValueOf(fn(m.current)))
 		return
 	}
 	switch v.Type().Kind() {

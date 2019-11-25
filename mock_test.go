@@ -194,7 +194,7 @@ func TestMockStruct(t *testing.T) {
 func TestCustomizedGenFuncs(t *testing.T) {
 	m := New(time.Now().UnixNano(), nil)
 	m.SetGenFuncs(GenFuncs{
-		"genInt": func() interface{} { return 101010 },
+		"genInt": func(data interface{}) interface{} { return 101010 },
 	})
 	var err error
 
@@ -264,4 +264,22 @@ func TestFormValues(t *testing.T) {
 		return false
 	}
 	assert.True(t, in(n, []string{"a", "b", "c"}))
+}
+
+func TestHooks(t *testing.T) {
+	m := New(time.Now().UnixNano(), nil)
+	str := "asdf"
+	m.SetBefore(func(data interface{}) {
+		str = "before"
+	})
+	m.SetAfter(func(data interface{}) {
+		assert.Equal(t, "before", str)
+		str = "after"
+	})
+	var err error
+
+	var n string
+	err = m.Mock("value(a, b, c)", &n)
+	assert.Nil(t, err)
+	assert.Equal(t, "after", str)
 }
