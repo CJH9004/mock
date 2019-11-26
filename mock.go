@@ -200,8 +200,10 @@ func (m *mocker) mockField(t Tag, v reflect.Value) {
 		fallthrough
 	case reflect.Float64:
 		m.mockFloat(t, v)
-		// default:
-		// 	log.Println("Unsupported type:", v.Type().Kind())
+	case reflect.Bool:
+		m.mockBool(t, v)
+	// default:
+	// 	log.Println("Unsupported type:", v.Type().Kind())
 	}
 }
 
@@ -219,6 +221,10 @@ func (m *mocker) mockUint(t Tag, v reflect.Value) {
 
 func (m *mocker) mockFloat(t Tag, v reflect.Value) {
 	v.SetFloat(m.gen.float(t))
+}
+
+func (m *mocker) mockBool(t Tag, v reflect.Value) {
+	v.SetBool(m.gen.bool(t))
 }
 
 func (m *mocker) mockSlice(t Tag, v reflect.Value) {

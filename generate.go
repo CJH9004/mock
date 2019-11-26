@@ -26,6 +26,14 @@ func NewGen(rand *rand.Rand) Generator {
 	}
 }
 
+func (g generator) Bool(ts string) (ret bool, err error) {
+	t, err := ParseTag("bool", ts)
+	if err != nil {
+		return false, err
+	}
+	return g.bool(t), nil
+}
+
 func (g generator) Int(ts string) (ret int64, err error) {
 	t, err := ParseTag("int", ts)
 	if err != nil {
@@ -75,7 +83,19 @@ func (g generator) int63n(n int64) int64 {
 	return g.rand.Int63n(n)
 }
 
+func (g generator) bool(tag Tag) bool {
+	if len(tag.Values) > 0 {
+		return g.fromValues(tag.Values).(bool)
+	}
+
+	return g.fromValues([]interface{}{true, false}).(bool)
+}
+
 func (g generator) int(tag Tag) int64 {
+	if len(tag.Values) > 0 {
+		return g.fromValues(tag.Values).(int64)
+	}
+
 	if tag.Type == "date" {
 		return g.dateUnix(tag)
 	}
@@ -83,10 +103,18 @@ func (g generator) int(tag Tag) int64 {
 }
 
 func (g generator) uint(tag Tag) uint64 {
+	if len(tag.Values) > 0 {
+		return g.fromValues(tag.Values).(uint64)
+	}
+
 	return g.rand.Uint64()%uint64(tag.Max-tag.Min) + uint64(tag.Min)
 }
 
 func (g generator) float(tag Tag) float64 {
+	if len(tag.Values) > 0 {
+		return g.fromValues(tag.Values).(float64)
+	}
+
 	return g.rand.Float64()*float64(tag.Max-tag.Min) + float64(tag.Min)
 }
 

@@ -283,3 +283,21 @@ func TestHooks(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "after", str)
 }
+
+func TestMockBool(t *testing.T) {
+	m := New(time.Now().UnixNano(), nil)
+	var err error
+
+	var n bool
+	err = m.Mock("value(true, false)", &n)
+	assert.Nil(t, err)
+
+	var n2 bool
+	err = m.Mock("value(true)", &n2)
+	assert.Nil(t, err)
+	assert.True(t, n2)
+
+	var n3 bool
+	err = m.Mock("", &n3)
+	assert.Nil(t, err)
+}

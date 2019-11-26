@@ -170,6 +170,17 @@ func ParseTag(typ, tags string) (t Tag, err error) {
 					}
 					t.Values = append(t.Values, n)
 				}
+			case typ == "bool":
+				for _, v := range vals {
+					if v != "true" && v != "false" {
+						return DefaultTag(), NewConflictError("fieldType", typ, f[1], v, err.Error())
+					}
+					n := false
+					if v == "true" {
+						n = true
+					}
+					t.Values = append(t.Values, n)
+				}
 			}
 		case "mock":
 			t.GenFunc = f[2]
